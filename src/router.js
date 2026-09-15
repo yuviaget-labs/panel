@@ -71,50 +71,6 @@ export async function handleRoute(request, env, ctx) {
     return redirect('/login?setup=1');
   }
 
-  // Debug endpoint - shows DB state
-  if (path === '/debug') {
-    try {
-      await ensureSchema(env.DB);
-      const users = await env.DB.prepare('SELECT id, username, role, panel_code, password FROM users').all();
-      const panels = await env.DB.prepare('SELECT * FROM panels').all();
-      return new Response(JSON.stringify({ users: users.results, panels: panels.results }, null, 2), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch(e) {
-      return new Response(JSON.stringify({ error: e.message }), { headers: { 'Content-Type': 'application/json' } });
-    }
-  }
-
-  // Test password hash
-  if (path === '/test-hash') {
-    const encoder = new TextEncoder();
-    const data = encoder.encode('admin123');
-    const hashBuf = await crypto.subtle.digest('SHA-256', data);
-    const hash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
-    return new Response(JSON.stringify({ hash, expected: '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', match: hash === '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9' }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  // Debug login - returns JSON instead of redirect
-  if (path === '/debug-login' && method === 'POST') {
-    try {
-      await ensureSchema(env.DB);
-      const formData = await request.formData();
-      const username = sanitize(formData.get('username') || '');
-      const password = formData.get('password') || '';
-      const user = await env.DB.prepare('SELECT id, username, password FROM users WHERE username = ?').bind(username).first();
-      if (!user) return new Response(JSON.stringify({ step: 'user_not_found', username }), { headers: { 'Content-Type': 'application/json' } });
-      
-      const { hashPassword } = await import('./auth.js');
-      const computed = await hashPassword(password);
-      const match = computed === user.password;
-      return new Response(JSON.stringify({ step: 'verify', username, passwordLen: password.length, storedHash: user.password, computedHash: computed, match }), { headers: { 'Content-Type': 'application/json' } });
-    } catch(e) {
-      return new Response(JSON.stringify({ error: e.message, stack: e.stack }), { headers: { 'Content-Type': 'application/json' } });
-    }
-  }
-
   // Parse route parts
   const parts = path.split('/').filter(Boolean);
 
