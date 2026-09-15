@@ -1,0 +1,151 @@
+import { getSessionUser } from './auth.js';
+import { handleLogin, handleRegister, handleLogout, handleResetDevice, handleJoinPanel } from './api/auth-api.js';
+import { handleConnect } from './api/connect.js';
+import { handleEncrypt } from './api/encrypt.js';
+import { handleGenerateKeys, handleKeyListActions } from './api/keys.js';
+import { handleUsersActions } from './api/users.js';
+import { handleServerSettings, handleSettingsUpdate } from './api/server-settings.js';
+import { renderLogin } from './pages/login.js';
+import { renderRegister } from './pages/register.js';
+import { renderDashboard } from './pages/dashboard.js';
+import { renderGenerate } from './pages/generate.js';
+import { renderKeys } from './pages/keys.js';
+import { renderUsers } from './pages/users.js';
+import { renderServer } from './pages/server.js';
+import { renderSettings } from './pages/settings.js';
+import { renderResetDevice } from './pages/reset-device.js';
+import { renderJoinPanel } from './pages/join-panel.js';
+
+function jsonResp(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function redirect(location) {
+  return new Response(null, { status: 302, headers: { Location: location } });
+}
+
+function htmlResp(html, status = 200) {
+  return new Response(html, {
+    status,
+    headers: { 'Content-Type': 'text/html;charset=UTF-8' },
+  });
+}
+
+function notFound() {
+  return new Response('<h1 style="text-align:center;margin-top:50px;font-family:sans-serif;">404 - Page Not Found</h1>', {
+    status: 404,
+    headers: { 'Content-Type': 'text/html' },
+  });
+}
+
+export async function handleRoute(request, env, ctx) {
+  const url = new URL(request.url);
+  const path = url.pathname;
+  const method = request.method;
+
+  // Parse route parts
+  const parts = path.split('/').filter(Boolean);
+
+  // SDK API handlers: /sdk/mundo/{panel_code} or /sdk/bcore/{panel_code}
+  if (parts[0] === 'sdk' && parts[1] && parts[2] && method === 'POST') {
+    const engine = parts[1].toLowerCase();
+    const panelCode = parts[2];
+    if (engine === 'mundo' || engine === 'bcore') {
+      return handleConnect(request, env, panelCode);
+    }
+  }
+
+  // Legacy API handlers: /connect/{panel_code} and /encrypt/{panel_code}
+  if (parts[0] === 'connect' && parts[1] && method === 'POST') {
+    return handleConnect(request, env, parts[1]);
+  }
+  if (parts[0] === 'encrypt' && parts[1] && method === 'POST') {
+    return handleEncrypt(request, env, parts[1]);
+  }
+
+  // Auth API routes
+  if (path === '/login' && method === 'POST') {
+    return handleLogin(request, env);
+  }
+  if (path === '/register' && method === 'POST') {
+    return handleRegister(request, env);
+  }
+  if (path === '/reset-device' && method === 'POST') {
+    return handleResetDevice(request, env);
+  }
+  if (path === '/logout') {
+    return handleLogout(request, env);
+  }
+
+  // Protected API routes (require POST)
+  if (method === 'POST') {
+    const user = await getSessionUser(request, env);
+    if (!user) return redirect('/login');
+
+    if (path === '/generate') {
+      return handleGenerateKeys(request, env, user);
+    }
+    if (path === '/keys') {
+      return handleKeyListActions(request, env, user);
+    }
+    if (path === '/users') {
+      return handleUsersActions(request, env, user);
+    }
+    if (path === '/server') {
+      return handleServerSettings(request, env, user);
+    }
+    if (path === '/settings') {
+      return handleSettingsUpdate(request, env, user);
+    }
+  }
+
+  // Page routes (GET)
+  if (method === 'GET') {
+    // Auth pages (no auth required)
+    if (path === '/login' || path === '/') {
+      return htmlResp(await renderLogin(env));
+    }
+    if (path === '/register') {
+      return htmlResp(await renderRegister(env));
+    }
+    if (path === '/reset-device') {
+      return htmlResp(await renderResetDevice(env));
+    }
+    if (path === '/join-panel') {
+      return htmlResp(await renderJoinPanel(env));
+    }
+    if (path === '/logout') {
+      return handleLogout(request, env);
+    }
+
+    // Protected pages
+    const user = await getSessionUser(request, env);
+    if (!user) return redirect('/login');
+
+    if (path === '/dashboard' || path === '/generate') {
+      return htmlResp(await renderDashboard(env, user));
+    }
+    if (path === '/generate') {
+      return htmlResp(await renderGenerate(env, user));
+    }
+    if (path === '/keys') {
+      return htmlResp(await renderKeys(env, user));
+    }
+    if (path === '/users') {
+      if (user.role !== 'OWNER' && user.role !== 'ADMIN') return redirect('/dashboard');
+      return htmlResp(await renderUsers(env, user));
+    }
+    if (path === '/server') {
+      if (user.role !== 'OWNER' && user.role !== 'ADMIN') return redirect('/dashboard');
+      return htmlResp(await renderServer(env, user));
+    }
+    if (path === '/settings') {
+      return htmlResp(await renderSettings(env, user));
+    }
+  }
+
+  return notFound();
+}
