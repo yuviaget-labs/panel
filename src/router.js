@@ -96,6 +96,25 @@ export async function handleRoute(request, env, ctx) {
     });
   }
 
+  // Debug login - returns JSON instead of redirect
+  if (path === '/debug-login' && method === 'POST') {
+    try {
+      await ensureSchema(env.DB);
+      const formData = await request.formData();
+      const username = sanitize(formData.get('username') || '');
+      const password = formData.get('password') || '';
+      const user = await env.DB.prepare('SELECT id, username, password FROM users WHERE username = ?').bind(username).first();
+      if (!user) return new Response(JSON.stringify({ step: 'user_not_found', username }), { headers: { 'Content-Type': 'application/json' } });
+      
+      const { hashPassword } = await import('./auth.js');
+      const computed = await hashPassword(password);
+      const match = computed === user.password;
+      return new Response(JSON.stringify({ step: 'verify', username, passwordLen: password.length, storedHash: user.password, computedHash: computed, match }), { headers: { 'Content-Type': 'application/json' } });
+    } catch(e) {
+      return new Response(JSON.stringify({ error: e.message, stack: e.stack }), { headers: { 'Content-Type': 'application/json' } });
+    }
+  }
+
   // Parse route parts
   const parts = path.split('/').filter(Boolean);
 
