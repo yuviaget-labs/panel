@@ -74,6 +74,7 @@ export async function handleRoute(request, env, ctx) {
   // Debug endpoint - shows DB state
   if (path === '/debug') {
     try {
+      await ensureSchema(env.DB);
       const users = await env.DB.prepare('SELECT id, username, role, panel_code, length(password) as pw_len FROM users').all();
       const panels = await env.DB.prepare('SELECT * FROM panels').all();
       const settings = await env.DB.prepare('SELECT * FROM mod_settings LIMIT 5').all();
