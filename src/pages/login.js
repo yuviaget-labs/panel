@@ -1,11 +1,44 @@
 import { sanitize } from '../auth.js';
+import { fetchOne } from '../db.js';
+
+async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function ensureSetup(db) {
+  try {
+    const existing = await db.prepare('SELECT id FROM users LIMIT 1').first();
+    if (existing) return;
+
+    const hash = await hashPassword('admin123');
+    await db.prepare('INSERT OR IGNORE INTO panels (panel_code, is_active) VALUES (?, 1)').bind('YUVI_001').run();
+    await db.prepare("INSERT INTO users (full_name, username, password, role, balance, panel_code) VALUES (?, ?, ?, ?, ?, ?)").bind('Owner', 'admin', hash, 'OWNER', 999999, 'YUVI_001').run();
+
+    const settings = [
+      ['modname', 'YUVI MOD'], ['mod_status', 'Online'], ['credit', 'Yuvi Panel'],
+      ['ESP', 'on'], ['Item', 'on'], ['AIM', 'on'], ['SilentAim', 'on'],
+      ['BulletTrack', 'on'], ['Floating', 'on'], ['Memory', 'on'], ['Setting', 'on'], ['panel_name', 'YUVI PANEL']
+    ];
+    for (const [name, value] of settings) {
+      await db.prepare('INSERT OR IGNORE INTO mod_settings (setting_name, setting_value, panel_code) VALUES (?, ?, ?)').bind(name, value, 'YUVI_001').run();
+    }
+    await db.prepare('INSERT OR IGNORE INTO mod_maintenance (panel_code, is_active, reason) VALUES (?, 0, ?)').bind('YUVI_001', 'Server is updating. Please wait...').run();
+  } catch (e) {}
+}
 
 export async function renderLogin(env, query = {}) {
+  // Auto-setup if DB is empty
+  await ensureSetup(env.DB);
+
   const error = query.error ? 'Invalid username or password' : 
                 query.blocked ? 'You have been logged out. Your account is Blocked by Admin/Owner.' : 
                 query.device_mismatch ? 'Account locked on another device.' : '';
   const registered = query.registered ? 'Account created! Please login.' : '';
   const resetSuccess = query.reset_success ? 'Device reset successful!' : '';
+  const setupDone = query.setup === '1';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -58,6 +91,7 @@ export async function renderLogin(env, query = {}) {
             ${error ? `<div class="alert-box alert-error"><i class="bi bi-exclamation-circle-fill"></i> ${sanitize(error)}</div>` : ''}
             ${registered ? `<div class="alert-box alert-success"><i class="bi bi-check-circle-fill"></i> ${sanitize(registered)}</div>` : ''}
             ${resetSuccess ? `<div class="alert-box alert-success"><i class="bi bi-check-circle-fill"></i> ${sanitize(resetSuccess)}</div>` : ''}
+            ${setupDone ? `<div style="padding:14px 16px;border-radius:14px;font-size:13px;font-weight:600;margin-bottom:16px;display:flex;align-items:flex-start;gap:10px;line-height:1.5;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);color:#059669"><i class="bi bi-check-circle-fill text-lg shrink-0"></i><div><p class="font-bold">Setup Complete!</p><p class="text-xs mt-1">Username: <b>admin</b> | Password: <b>admin123</b></p></div></div>` : ''}
             
             <form method="POST" action="/login" class="space-y-3.5">
                 <input type="hidden" name="device_info" id="device_info_login">
