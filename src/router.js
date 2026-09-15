@@ -1,4 +1,4 @@
-import { getSessionUser } from './auth.js';
+import { getSessionUser, sanitize } from './auth.js';
 import { ensureSchema, ensureDefaultOwner } from './setup.js';
 import { handleLogin, handleRegister, handleLogout, handleResetDevice, handleJoinPanel } from './api/auth-api.js';
 import { handleConnect } from './api/connect.js';

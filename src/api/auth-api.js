@@ -87,7 +87,7 @@ export async function handleLogin(request, env) {
       },
     });
   } catch (err) {
-    return redirect('/login?error=1');
+    return new Response(JSON.stringify({ error: err.message, stack: err.stack }), { headers: { 'Content-Type': 'application/json' } });
   }
 }
 
