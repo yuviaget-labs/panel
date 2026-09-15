@@ -98,6 +98,20 @@ export async function handleRoute(request, env, ctx) {
     return redirect('/login?setup=1');
   }
 
+  // Debug endpoint - shows DB state
+  if (path === '/debug') {
+    try {
+      const users = await env.DB.prepare('SELECT id, username, role, panel_code, length(password) as pw_len FROM users').all();
+      const panels = await env.DB.prepare('SELECT * FROM panels').all();
+      const settings = await env.DB.prepare('SELECT * FROM mod_settings LIMIT 5').all();
+      return new Response(JSON.stringify({ users: users.results, panels: panels.results, settings: settings.results }, null, 2), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch(e) {
+      return new Response(JSON.stringify({ error: e.message }), { headers: { 'Content-Type': 'application/json' } });
+    }
+  }
+
   // Parse route parts
   const parts = path.split('/').filter(Boolean);
 

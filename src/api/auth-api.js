@@ -34,11 +34,30 @@ async function generateDeviceFingerprint(deviceInfo) {
   return await hashPassword(str);
 }
 
-// For password verification we use SHA-256 comparison (simplified bcrypt alternative)
-// In production, use a proper password hashing library
 async function verifyPassword(password, hash) {
   const computed = await hashPassword(password);
   return computed === hash;
+}
+
+// Ensure default admin account exists
+async function ensureOwnerExists(db) {
+  try {
+    const existing = await db.prepare('SELECT id FROM users LIMIT 1').first();
+    if (existing) return;
+
+    const hash = await hashPassword('admin123');
+    await db.prepare('INSERT OR IGNORE INTO panels (panel_code, is_active) VALUES (?, 1)').bind('YUVI_001').run();
+    await db.prepare("INSERT OR IGNORE INTO users (full_name, username, password, role, balance, panel_code) VALUES (?, ?, ?, ?, ?, ?)").bind('Owner', 'admin', hash, 'OWNER', 999999, 'YUVI_001').run();
+    const settings = [
+      ['modname', 'YUVI MOD'], ['mod_status', 'Online'], ['credit', 'Yuvi Panel'],
+      ['ESP', 'on'], ['Item', 'on'], ['AIM', 'on'], ['SilentAim', 'on'],
+      ['BulletTrack', 'on'], ['Floating', 'on'], ['Memory', 'on'], ['Setting', 'on'], ['panel_name', 'YUVI PANEL']
+    ];
+    for (const [name, value] of settings) {
+      await db.prepare('INSERT OR IGNORE INTO mod_settings (setting_name, setting_value, panel_code) VALUES (?, ?, ?)').bind(name, value, 'YUVI_001').run();
+    }
+    await db.prepare('INSERT OR IGNORE INTO mod_maintenance (panel_code, is_active, reason) VALUES (?, 0, ?)').bind('YUVI_001', 'Server is updating.').run();
+  } catch (e) {}
 }
 
 export async function handleLogin(request, env) {
@@ -51,6 +70,9 @@ export async function handleLogin(request, env) {
     if (!username || !password) {
       return redirect('/login?error=1');
     }
+
+    // Ensure owner exists (first-time setup)
+    await ensureOwnerExists(env.DB);
 
     const user = await fetchOne(env.DB, 'SELECT * FROM users WHERE username = ?', [username]);
     if (!user) {
