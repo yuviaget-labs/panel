@@ -20,14 +20,29 @@ export default {
 
     try {
       const response = await handleRoute(request, env, ctx);
+
       // Add CORS headers to all responses
-      response.headers.set('Access-Control-Allow-Origin', '*');
+      response.headers.set(
+        'Access-Control-Allow-Origin',
+        '*'
+      );
+
       return response;
+
     } catch (err) {
-      return new Response(JSON.stringify({ status: false, reason: 'SERVER ERROR: ' + err.message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      });
+      return new Response(
+        JSON.stringify({
+          status: false,
+          reason: 'SERVER ERROR: ' + err.message
+        }),
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        }
+      );
     }
   },
 };
