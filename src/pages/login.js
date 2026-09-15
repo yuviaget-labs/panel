@@ -1,37 +1,9 @@
 import { sanitize } from '../auth.js';
-import { fetchOne } from '../db.js';
-
-async function hashPassword(password) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function ensureSetup(db) {
-  try {
-    const existing = await db.prepare('SELECT id FROM users LIMIT 1').first();
-    if (existing) return;
-
-    const hash = await hashPassword('admin123');
-    await db.prepare('INSERT OR IGNORE INTO panels (panel_code, is_active) VALUES (?, 1)').bind('YUVI_001').run();
-    await db.prepare("INSERT INTO users (full_name, username, password, role, balance, panel_code) VALUES (?, ?, ?, ?, ?, ?)").bind('Owner', 'admin', hash, 'OWNER', 999999, 'YUVI_001').run();
-
-    const settings = [
-      ['modname', 'YUVI MOD'], ['mod_status', 'Online'], ['credit', 'Yuvi Panel'],
-      ['ESP', 'on'], ['Item', 'on'], ['AIM', 'on'], ['SilentAim', 'on'],
-      ['BulletTrack', 'on'], ['Floating', 'on'], ['Memory', 'on'], ['Setting', 'on'], ['panel_name', 'YUVI PANEL']
-    ];
-    for (const [name, value] of settings) {
-      await db.prepare('INSERT OR IGNORE INTO mod_settings (setting_name, setting_value, panel_code) VALUES (?, ?, ?)').bind(name, value, 'YUVI_001').run();
-    }
-    await db.prepare('INSERT OR IGNORE INTO mod_maintenance (panel_code, is_active, reason) VALUES (?, 0, ?)').bind('YUVI_001', 'Server is updating. Please wait...').run();
-  } catch (e) {}
-}
+import { ensureSchema, ensureDefaultOwner } from '../setup.js';
 
 export async function renderLogin(env, query = {}) {
   // Auto-setup if DB is empty
-  await ensureSetup(env.DB);
+  try { await ensureSchema(env.DB); await ensureDefaultOwner(env.DB); } catch(e) {}
 
   const error = query.error ? 'Invalid username or password' : 
                 query.blocked ? 'You have been logged out. Your account is Blocked by Admin/Owner.' : 

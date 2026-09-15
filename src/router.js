@@ -1,4 +1,5 @@
 import { getSessionUser } from './auth.js';
+import { ensureSchema, ensureDefaultOwner } from './setup.js';
 import { handleLogin, handleRegister, handleLogout, handleResetDevice, handleJoinPanel } from './api/auth-api.js';
 import { handleConnect } from './api/connect.js';
 import { handleEncrypt } from './api/encrypt.js';
@@ -41,41 +42,13 @@ function notFound() {
   });
 }
 
-// Auto-setup: Create default owner account + panel if DB is empty
+// Auto-setup: Create tables + default owner account if DB is empty
 async function autoSetup(env) {
   try {
+    await ensureSchema(env.DB);
     const existing = await env.DB.prepare('SELECT id FROM users LIMIT 1').first();
-    if (existing) return false; // Already setup
-
-    // Hash password for admin123
-    const encoder = new TextEncoder();
-    const data = encoder.encode('admin123');
-    const hashBuf = await crypto.subtle.digest('SHA-256', data);
-    const hash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
-
-    // Insert default panel
-    await env.DB.prepare('INSERT OR IGNORE INTO panels (panel_code, is_active) VALUES (?, 1)').bind('YUVI_001').run();
-
-    // Insert default owner
-    await env.DB.prepare(
-      "INSERT INTO users (full_name, username, password, role, balance, panel_code) VALUES (?, ?, ?, ?, ?, ?)"
-    ).bind('Owner', 'admin', hash, 'OWNER', 999999, 'YUVI_001').run();
-
-    // Insert default mod settings
-    const defaultSettings = [
-      ['modname', 'YUVI MOD'], ['mod_status', 'Online'], ['credit', 'Yuvi Panel'],
-      ['ESP', 'on'], ['Item', 'on'], ['AIM', 'on'], ['SilentAim', 'on'],
-      ['BulletTrack', 'on'], ['Floating', 'on'], ['Memory', 'on'], ['Setting', 'on'],
-      ['panel_name', 'YUVI PANEL']
-    ];
-    for (const [name, value] of defaultSettings) {
-      await env.DB.prepare('INSERT OR IGNORE INTO mod_settings (setting_name, setting_value, panel_code) VALUES (?, ?, ?)').bind(name, value, 'YUVI_001').run();
-    }
-
-    // Insert default maintenance (off)
-    await env.DB.prepare('INSERT OR IGNORE INTO mod_maintenance (panel_code, is_active, reason) VALUES (?, 0, ?)').bind('YUVI_001', 'Server is updating. Please wait...').run();
-
-    return true; // Setup done
+    if (existing) return false;
+    return await ensureDefaultOwner(env.DB);
   } catch (e) {
     return false;
   }

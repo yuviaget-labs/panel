@@ -1,6 +1,12 @@
 // JWT utilities using Web Crypto API
 const encoder = new TextEncoder();
 
+export async function hashPassword(password) {
+  const data = encoder.encode(password);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 async function getKey(secret) {
   return crypto.subtle.importKey(
     'raw',
