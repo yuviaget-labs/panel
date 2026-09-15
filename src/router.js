@@ -75,15 +75,25 @@ export async function handleRoute(request, env, ctx) {
   if (path === '/debug') {
     try {
       await ensureSchema(env.DB);
-      const users = await env.DB.prepare('SELECT id, username, role, panel_code, length(password) as pw_len FROM users').all();
+      const users = await env.DB.prepare('SELECT id, username, role, panel_code, password FROM users').all();
       const panels = await env.DB.prepare('SELECT * FROM panels').all();
-      const settings = await env.DB.prepare('SELECT * FROM mod_settings LIMIT 5').all();
-      return new Response(JSON.stringify({ users: users.results, panels: panels.results, settings: settings.results }, null, 2), {
+      return new Response(JSON.stringify({ users: users.results, panels: panels.results }, null, 2), {
         headers: { 'Content-Type': 'application/json' }
       });
     } catch(e) {
       return new Response(JSON.stringify({ error: e.message }), { headers: { 'Content-Type': 'application/json' } });
     }
+  }
+
+  // Test password hash
+  if (path === '/test-hash') {
+    const encoder = new TextEncoder();
+    const data = encoder.encode('admin123');
+    const hashBuf = await crypto.subtle.digest('SHA-256', data);
+    const hash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    return new Response(JSON.stringify({ hash, expected: '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', match: hash === '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9' }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
   // Parse route parts
