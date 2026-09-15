@@ -44,13 +44,13 @@ export async function handleLogin(request, env) {
       return redirect('/login?error=1');
     }
 
-    // Ensure schema + owner exists (first-time setup)
-    try { await ensureSchema(env.DB); } catch(e) {}
-    await ensureDefaultOwner(env.DB);
-
-    const user = await fetchOne(env.DB, 'SELECT * FROM users WHERE username = ?', [username]);
+    const user = await env.DB.prepare('SELECT * FROM users WHERE username = ?').bind(username).first();
     if (!user) {
-      return redirect('/login?error=1');
+      await ensureSchema(env.DB);
+      await ensureDefaultOwner(env.DB);
+      const retry = await env.DB.prepare('SELECT * FROM users WHERE username = ?').bind(username).first();
+      if (!retry) return redirect('/login?error=1');
+      Object.assign(user, retry);
     }
 
     const valid = await verifyPassword(password, user.password);
@@ -65,11 +65,11 @@ export async function handleLogin(request, env) {
     const fingerprint = await generateDeviceFingerprint(deviceInfo);
 
     if (!user.device_fingerprint || user.device_fingerprint === '') {
-      await execute(env.DB, 'UPDATE users SET device_fingerprint = ?, last_login = datetime(\'now\') WHERE id = ?', [fingerprint, user.id]);
+      await env.DB.prepare("UPDATE users SET device_fingerprint = ?, last_login = datetime('now') WHERE id = ?").bind(fingerprint, user.id).run();
     } else if (user.device_fingerprint !== fingerprint) {
       return redirect('/login?device_mismatch=1');
     } else {
-      await execute(env.DB, 'UPDATE users SET last_login = datetime(\'now\') WHERE id = ?', [user.id]);
+      await env.DB.prepare("UPDATE users SET last_login = datetime('now') WHERE id = ?").bind(user.id).run();
     }
 
     const token = await signJWT({
