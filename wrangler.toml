@@ -5,9 +5,9 @@ compatibility_date = "2024-01-01"
 # D1 Database binding
 [[d1_databases]]
 binding = "DB"
-database_name = "yuvi-panel-db"
-database_id = "YOUR_D1_DATABASE_ID_HERE"
+database_name = "yuviarc"
+database_id = "7d6de387-34e4-41a0-8a5a-f604936ba32c"
 
 # Environment variables
 [vars]
-JWT_SECRET = "change-this-to-a-strong-random-secret-in-production"
+JWT_SECRET = "yuvi-panel-secret-key-2026-very-secure"
